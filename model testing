@@ -1,0 +1,51 @@
+import sys
+import os
+import ray
+sys.path.append('')
+import pytorch_lightning as pl
+from sastvd.linevd import LitGNN
+import sastvd.linevd as lvd
+from ray import tune
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+config = {
+        "hfeat": tune.choice([512]),
+        "embtype": tune.choice(["codebert"]),
+        "stmtweight": tune.choice([1]),
+        "hdropout": tune.choice([0.3]),
+        "gatdropout": tune.choice([0.2]),
+        "modeltype": tune.choice(["gat2layer"]),
+        "gnntype": tune.choice(["gat"]),
+        "loss": tune.choice(["ce"]),
+        "scea": tune.choice([0.5]),
+        "gtype": tune.choice(["pdg+raw"]),
+        "batch_size": tune.choice([1024]),
+        "multitask": tune.choice(["linemethod"]),
+        "splits": tune.choice(["default"]),
+        "lr": tune.choice([1e-1]),#
+        "config/gtype":"pdg+raw",
+        "config/splits":"default",
+        "config/embtype":"codebert"
+}
+# Load the model from the checkpoint
+model = lvd.LitGNN.load_from_checkpoint(
+    checkpoint_path="./storage/processed/raytune_best_-1/202409010128_07ffcb4_delete_unnecessary_files/lightning_logs/version_18464/checkpoints/epoch=0-step=4044.ckpt",
+    hparams_file="./storage/processed/raytune_best_-1/202409010128_07ffcb4_delete_unnecessary_files/lightning_logs/version_18464/hparams.yaml",
+    map_location=None,
+)
+
+# Create a trainer instance
+trainer = pl.Trainer(
+    devices=1, 
+    accelerator="gpu"
+)
+data = lvd.BigVulDatasetLineVDDataModule(
+    batch_size=1024,
+    nsampling_hops=2,
+    methodlevel=False,
+    sample=-1,
+    nsampling=True,
+    gtype=config["config/gtype"],
+    splits=config["config/splits"],
+    feat=config["config/embtype"],
+)# Test the model
+trainer.test(model, datamodule=data)
